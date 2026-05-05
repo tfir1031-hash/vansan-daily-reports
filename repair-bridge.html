@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>vouchers再取込</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f4f4f5;color:#18181b}
+.card{max-width:440px;background:#fff;padding:32px 24px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center}
+h1{margin:0 0 12px;font-size:22px;color:#16a34a;transition:color .3s}
+h1.error{color:#dc2626}
+p{margin:8px 0;font-size:14px;line-height:1.6;white-space:pre-line}
+small{color:#71717a}
+.spinner{width:32px;height:32px;border:3px solid #e4e4e7;border-top-color:#16a34a;border-radius:50%;animation:spin 1s linear infinite;margin:16px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="spinner" class="spinner"></div>
+  <h1 id="title">実行を開始しています...</h1>
+  <p id="message">少々お待ちください</p>
+  <p><small id="meta">対象日: -</small></p>
+  <p style="margin-top:24px"><small id="hint" class="hidden">このページを閉じてTeamsに戻り、完了通知をお待ちください。</small></p>
+</div>
+<script>
+(async()=>{
+  const params=new URLSearchParams(location.search);
+  const date=params.get('date'),token=params.get('token');
+  const $title=document.getElementById('title');
+  const $msg=document.getElementById('message');
+  const $meta=document.getElementById('meta');
+  const $sp=document.getElementById('spinner');
+  const $hint=document.getElementById('hint');
+  $meta.textContent='対象日: '+(date||'-');
+  if(!date||!token){
+    $sp.classList.add('hidden');
+    $title.classList.add('error');
+    $title.textContent='⚠️ パラメータ不足';
+    $msg.textContent='date / token がURLに含まれていません';
+    return;
+  }
+  try{
+    const res=await fetch('https://wgjiqmjrstnllvnvjwqi.supabase.co/functions/v1/vouchers-repair-execute',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({business_date:date,token:token,async:true})
+    });
+    $sp.classList.add('hidden');
+    if(res.ok){
+      $title.textContent='✅ 実行を開始しました';
+      $msg.textContent='再取込をバックグラウンドで開始しました。\n完了したらTeamsに通知が届きます（3〜7分）。';
+      $hint.classList.remove('hidden');
+    }else{
+      const errText=await res.text();
+      $title.classList.add('error');
+      $title.textContent='⚠️ エラー';
+      $msg.textContent='ステータス: '+res.status+'\n'+errText.slice(0,200);
+    }
+  }catch(e){
+    $sp.classList.add('hidden');
+    $title.classList.add('error');
+    $title.textContent='⚠️ ネットワークエラー';
+    $msg.textContent=String(e&&e.message||e);
+  }
+})();
+</script>
+</body>
+</html>
