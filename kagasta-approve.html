@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>かがすた速報の配信</title>
+<style>
+  :root { color-scheme: light dark; --bar:#FF6600; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 16px; background:#fff; color:#1a1a1a; line-height:1.75;
+         font-family:-apple-system,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    body { background:#141414; color:#ececec; }
+    .card { background:#1e1e1e; }
+  }
+  .card { max-width:520px; margin:0 auto; background:#fafafa; border-radius:14px;
+          padding:22px 20px; border-left:6px solid var(--bar); }
+  h1 { font-size:20px; margin:0 0 14px; }
+  p { margin:10px 0; font-size:15px; }
+  .n { font-size:30px; font-weight:700; font-family:"Segoe UI",sans-serif; }
+  .sub { font-size:13px; opacity:.7; margin-top:18px; }
+  .btn { display:block; width:100%; padding:16px; margin:20px 0 0; font-size:17px; font-weight:700;
+         border:0; border-radius:10px; background:#FF6600; color:#fff; cursor:pointer;
+         font-family:inherit; }
+  .btn.danger { background:#B3261E; }
+  .btn:disabled { opacity:.5; cursor:default; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <h1 id="title">読み込んでいます</h1>
+  <div id="body"></div>
+</div>
+<script>
+(function () {
+  var EF = "https://wgjiqmjrstnllvnvjwqi.supabase.co/functions/v1/kagasta-approve";
+  var WD = ["日","月","火","水","木","金","土"];
+  var q = new URLSearchParams(location.search);
+  var d = q.get("d") || "", a = q.get("a") || "", e = q.get("e") || "", s = (q.get("s") || "").toLowerCase();
+
+  var elTitle = document.getElementById("title");
+  var elBody  = document.getElementById("body");
+  var elCard  = document.getElementById("card");
+
+  function tone(c) { elCard.style.borderLeftColor = c; }
+  function show(title, html, color) {
+    elTitle.textContent = title;
+    elBody.innerHTML = html;
+    if (color) tone(color);
+  }
+  function jpDate(v) {
+    var p = v.split("-");
+    if (p.length !== 3) return v;
+    var dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    return (+p[1]) + "/" + (+p[2]) + "(" + WD[dt.getUTCDay()] + ")";
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^(approve|discard)$/.test(a)
+      || !/^\d{1,12}$/.test(e) || !/^[0-9a-f]{64}$/.test(s)) {
+    show("リンクが正しくありません",
+         "<p>Teamsに届いたリンクをそのまま押してください。URLを書き換えると開けません。</p>", "#B3261E");
+    return;
+  }
+  if (Math.floor(Date.now() / 1000) > Number(e)) {
+    show("リンクの期限が切れています",
+         "<p>" + jpDate(d) + " の速報のリンクは期限切れです。</p>" +
+         "<p>まだ配信していなければ、Claudeに言えば新しいリンクを出せます。</p>", "#B26A00");
+    return;
+  }
+
+  var isApprove = (a === "approve");
+  show(
+    isApprove ? (jpDate(d) + " の速報を配信しますか") : (jpDate(d) + " の下書きを取り消しますか"),
+    (isApprove
+      ? "<p>押すと直営16店のホスナビ「VANSAN通信」に出ます。</p>"
+      : "<p>押すと下書きが消えます。文面は作り直しになります。</p>") +
+    '<button class="btn' + (isApprove ? '' : ' danger') + '" id="go" type="button">' +
+      (isApprove ? "配信する" : "取り消す") + "</button>" +
+    '<p class="sub">' + (isApprove
+      ? "まだ配信していません。このまま閉じれば何も起きません。"
+      : "まだ消えていません。このまま閉じれば下書きは残ります。") + "</p>",
+    "#FF6600"
+  );
+
+  document.getElementById("go").addEventListener("click", function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = "送信中";
+    fetch(EF, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ d: d, a: a, e: e, s: s })
+    })
+    .then(function (r) { return r.json().then(function (j) { return { st: r.status, j: j }; }); })
+    .then(function (res) {
+      var j = res.j || {};
+      if (j.ok) {
+        show(j.title || "完了しました",
+             "<p>" + (j.message || "") + "</p>" +
+             (j.sub ? '<p class="sub">' + j.sub + "</p>" : ""), "#1F6FD6");
+      } else {
+        show(j.title || "できませんでした",
+             "<p>" + (j.message || ("エラー " + res.st)) + "</p>", "#B26A00");
+      }
+    })
+    .catch(function () {
+      btn.disabled = false;
+      btn.textContent = isApprove ? "配信する" : "取り消す";
+      show(isApprove ? (jpDate(d) + " の速報を配信しますか") : (jpDate(d) + " の下書きを取り消しますか"),
+           "<p>通信に失敗しました。電波を確かめて、もう一度押してください。</p>" +
+           '<button class="btn' + (isApprove ? '' : ' danger') + '" id="go2" type="button">もう一度</button>',
+           "#B3261E");
+      var b2 = document.getElementById("go2");
+      if (b2) b2.addEventListener("click", function () { location.reload(); });
+    });
+  });
+})();
+</script>
+</body>
+</html>
